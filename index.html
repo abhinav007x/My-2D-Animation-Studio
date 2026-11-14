@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My 2D Animation Studio</title>
+<style>
+:root{--bg:#111827;--panel:#1f2937;--line:#374151;--text:#f9fafb;--muted:#9ca3af;--accent:#8b5cf6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,Segoe UI,sans-serif}
+header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:19px;margin:0}button,select,input{font:inherit}button{background:var(--accent);border:0;color:white;padding:9px 13px;border-radius:8px;cursor:pointer}button.secondary{background:#374151}button:disabled{opacity:.5;cursor:not-allowed}
+main{display:grid;grid-template-columns:260px minmax(300px,1fr) 250px;gap:12px;padding:12px;max-width:1500px;margin:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}.panel h2{font-size:14px;margin:0 0 12px;color:#ddd}
+label{display:block;color:var(--muted);font-size:12px;margin:12px 0 5px}input[type=text],select{width:100%;background:#111827;color:white;border:1px solid var(--line);padding:8px;border-radius:7px}
+input[type=color]{width:100%;height:34px;background:#111827;border:1px solid var(--line);border-radius:7px}
+input[type=range]{width:100%}.canvas-wrap{background:#0b1020;border-radius:10px;padding:10px;display:grid;place-items:center;min-height:400px}
+canvas{width:100%;max-width:900px;aspect-ratio:16/9;background:#dbeafe;border-radius:6px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.timeline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.small{font-size:12px;color:var(--muted);line-height:1.5}.row{display:flex;gap:8px}.row>*{flex:1}
+footer{padding:0 14px 16px;color:var(--muted);text-align:center;font-size:12px}
+@media(max-width:950px){main{grid-template-columns:1fr}.canvas-wrap{min-height:250px}}
+</style>
+</head>
+<body>
+<header><h1>🎬 My 2D Animation Studio</h1><div class="row" style="flex:0 1 auto"><button class="secondary" id="reset">Reset scene</button><button id="export">Export video</button></div></header>
+<main>
+<aside class="panel">
+<h2>Character designer</h2>
+<label>Character name</label><input id="name" type="text" value="My Character">
+<label>Body colour</label><input id="body" type="color" value="#8b5cf6">
+<label>Skin colour</label><input id="skin" type="color" value="#f2bd91">
+<label>Hair colour</label><input id="hair" type="color" value="#30251f">
+<label>Expression</label><select id="face"><option value="happy">Happy</option><option value="neutral">Neutral</option><option value="surprised">Surprised</option></select>
+<label>Character size <span id="sizeVal">100%</span></label><input id="size" type="range" min="60" max="150" value="100">
+<label>Horizontal position</label><input id="pos" type="range" min="10" max="90" value="50">
+<p class="small">Change the colours, expression, size and position. Press Play to preview the character animation.</p>
+</aside>
+<section class="panel">
+<h2>Scene preview</h2>
+<div class="canvas-wrap"><canvas id="stage" width="960" height="540"></canvas></div>
+<div class="toolbar">
+<button id="play">▶ Play</button><button class="secondary" id="stop">■ Stop</button>
+<button class="secondary" id="addText">Add title</button>
+</div>
+<div class="timeline">
+<label style="margin:0">Animation speed</label><input id="speed" type="range" min="0.3" max="2.5" step=".1" value="1">
+<span id="speedVal" class="small">1.0×</span>
+<label style="margin:0">Background</label><select id="background" style="max-width:170px"><option value="day">Sunny sky</option><option value="sunset">Sunset</option><option value="night">Night</option><option value="plain">Plain</option></select>
+</div>
+<p class="small">This starter studio includes a live 2D character preview and basic motion. More tools such as frame-by-frame drawing, multiple characters, audio tracks and advanced editing can be added later.</p>
+</section>
+<aside class="panel">
+<h2>Scene settings</h2>
+<label>Scene title</label><input id="title" type="text" value="My first animation">
+<label>Ground colour</label><input id="ground" type="color" value="#65a765">
+<label>Show character name</label><select id="showName"><option value="yes">Yes</option><option value="no">No</option></select>
+<label>Animation</label><select id="motion"><option value="bounce">Gentle bounce</option><option value="wave">Wave hand</option><option value="walk">Walk in place</option><option value="idle">Idle / breathing</option></select>
+<div style="margin-top:18px"><button class="secondary" id="snapshot" style="width:100%">Save preview image</button></div>
+<p class="small" id="status" aria-live="polite">Ready. Customize your character to begin.</p>
+</aside>
+</main>
+<footer>Made as a beginner-friendly personal project. Works locally in a modern desktop browser; no account or paid API required.</footer>
+<script>
+const $=id=>document.getElementById(id), c=$('stage'),ctx=c.getContext('2d');
+let playing=false, raf=0, start=0, elapsed=0, titleAdded=false;
+const fields=['body','skin','hair','face','size','pos','background','ground','showName','motion','name','title'];
+fields.forEach(id=>$(id).addEventListener('input',draw));
+$('size').addEventListener('input',()=> $('sizeVal').textContent=$('size').value+'%');
+$('speed').addEventListener('input',()=> $('speedVal').textContent=Number($('speed').value).toFixed(1)+'×');
+function rounded(x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function draw(t=elapsed){
+ const W=c.width,H=c.height,bg=$('background').value;
+ let sky=bg==='night'?'#101a3b':bg==='sunset'?'#f5a17b':bg==='plain'?'#e5e7eb':'#9bd8f5';
+ ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+ if(bg==='day'){ctx.fillStyle='#ffe58a';ctx.beginPath();ctx.arc(790,95,48,0,Math.PI*2);ctx.fill()}
+ if(bg==='night'){ctx.fillStyle='#fff2b0';ctx.beginPath();ctx.arc(790,95,34,0,Math.PI*2);ctx.fill();for(let i=0;i<24;i++){ctx.fillStyle='#fff';ctx.fillRect((i*137)%940+5,(i*71)%240+10,3,3)}}
+ ctx.fillStyle=$('ground').value;ctx.fillRect(0,420,W,120);
+ ctx.fillStyle='rgba(0,0,0,.13)';ctx.beginPath();ctx.ellipse(W*.5,438,120,17,0,0,Math.PI*2);ctx.fill();
+ const scale=Number($('size').value)/100, x=W*Number($('pos').value)/100;
+ const motion=$('motion').value, phase=t*Number($('speed').value)*.004;
+ let bob=motion==='bounce'?Math.abs(Math.sin(phase*2))*22:motion==='idle'?Math.sin(phase)*5:motion==='walk'?Math.abs(Math.sin(phase*2))*4:0;
+ let sway=motion==='walk'?Math.sin(phase*2)*13:0;
+ ctx.save();ctx.translate(x,390-bob);ctx.scale(scale,scale);
+ // legs
+ ctx.strokeStyle='#263248';ctx.lineWidth=18;ctx.lineCap='round';
+ let step=motion==='walk'?Math.sin(phase*2)*18:0;
+ ctx.beginPath();ctx.moveTo(-25,0);ctx.lineTo(-28+step,43);ctx.moveTo(25,0);ctx.lineTo(28-step,43);ctx.stroke();
+ // torso
+ rounded(-48,-112,96,118,24,$('body').value);
+ // arms
+ ctx.strokeStyle=$('skin').value;ctx.lineWidth=17;ctx.beginPath();
+ ctx.moveTo(-43,-94);ctx.lineTo(-75,-45);
+ let wave=motion==='wave'?Math.sin(phase*4)*16:0;
+ ctx.moveTo(43,-94);ctx.lineTo(75,-55-wave);ctx.stroke();
+ // head
+ ctx.fillStyle=$('skin').value;ctx.beginPath();ctx.arc(0,-155,48,0,Math.PI*2);ctx.fill();
+ // hair cap
+ ctx.fillStyle=$('hair').value;ctx.beginPath();ctx.arc(0,-171,49,Math.PI,Math.PI*2);ctx.lineTo(48,-160);ctx.quadraticCurveTo(0,-202,-48,-160);ctx.fill();
+ // eyes
+ ctx.fillStyle='#252525';ctx.beginPath();ctx.arc(-17,-160,4,0,Math.PI*2);ctx.arc(17,-160,4,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle='#713f32';ctx.lineWidth=3;ctx.beginPath();
+ if($('face').value==='happy'){ctx.arc(0,-147,17,.15,Math.PI-.15)}
+ else if($('face').value==='surprised'){ctx.fillStyle='#713f32';ctx.beginPath();ctx.arc(0,-143,7,0,Math.PI*2);ctx.fill()}
+ else{ctx.moveTo(-10,-145);ctx.lineTo(10,-145)}ctx.stroke();
+ ctx.restore();
+ if($('showName').value==='yes'){ctx.fillStyle='#172033';ctx.font='bold 22px system-ui';ctx.textAlign='center';ctx.fillText($('name').value.slice(0,32),x,505)}
+ if(titleAdded && $('title').value){ctx.fillStyle='#172033';ctx.font='bold 30px system-ui';ctx.textAlign='center';ctx.fillText($('title').value.slice(0,50),480,55)}
+}
+function loop(ts){if(!playing)return;elapsed=ts-start;draw(elapsed);raf=requestAnimationFrame(loop)}
+$('play').onclick=()=>{if(playing)return;playing=true;start=performance.now()-elapsed;draw();raf=requestAnimationFrame(loop);$('status').textContent='Preview playing.'};
+$('stop').onclick=()=>{playing=false;cancelAnimationFrame(raf);elapsed=0;draw(0);$('status').textContent='Preview stopped.'};
+$('addText').onclick=()=>{titleAdded=!titleAdded;draw();$('status').textContent=titleAdded?'Title is visible.':'Title hidden.'};
+$('reset').onclick=()=>{fields.forEach(id=>{const el=$(id);if(id==='body')el.value='#8b5cf6';if(id==='skin')el.value='#f2bd91';if(id==='hair')el.value='#30251f';if(id==='face')el.value='happy';if(id==='size')el.value=100;if(id==='pos')el.value=50;if(id==='background')el.value='day';if(id==='ground')el.value='#65a765';if(id==='showName')el.value='yes';if(id==='motion')el.value='bounce';if(id==='name')el.value='My Character';if(id==='title')el.value='My first animation'});titleAdded=false;elapsed=0;draw();$('sizeVal').textContent='100%';$('status').textContent='Scene reset.'};
+$('snapshot').onclick=()=>{const a=document.createElement('a');a.download='animation-preview.png';a.href=c.toDataURL('image/png');a.click();$('status').textContent='Preview image saved.'};
+$('export').onclick=async()=>{
+ if(!('captureStream'in c)&&!window.MediaRecorder){$('status').textContent='Video export is not supported in this browser.';return}
+ const stream=c.captureStream(30);let rec;
+ try{rec=new MediaRecorder(stream,{mimeType:'video/webm'});}catch(e){rec=new MediaRecorder(stream)}
+ const chunks=[];rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+ rec.onstop=()=>{const blob=new Blob(chunks,{type:rec.mimeType||'video/webm'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='my-2d-animation.webm';a.click();URL.revokeObjectURL(url);$('status').textContent='Video exported. If needed, convert WEBM to MP4 in a video editor.'};
+ elapsed=0;playing=true;start=performance.now();draw(0);raf=requestAnimationFrame(loop);$('status').textContent='Recording 5-second preview...';
+ rec.start();setTimeout(()=>{playing=false;cancelAnimationFrame(raf);rec.stop();},5000);
+};
+draw();
+</script>
+</body></html>
